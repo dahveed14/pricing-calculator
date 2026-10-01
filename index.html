@@ -38,6 +38,7 @@ const DEFAULT_CONFIG = {
 };
 
 const PRICING_LAST_UPDATED = "2026-09-30";
+const VA_NAME = "Kaleigh";
 
 function loadConfigFromURL() {
   try {
@@ -159,15 +160,19 @@ function App() {
     if (addOns.blinds > 0) addOnLabels.push(addOns.blinds + " Blind Set" + (addOns.blinds > 1 ? "s" : ""));
     if (addOns.shutters > 0) addOnLabels.push(addOns.shutters + " Shutter Set" + (addOns.shutters > 1 ? "s" : ""));
     const lines = [
-      "Hi! Thanks for chatting with Two Trees Cleaning today. Here's your quote summary:",
+      "Hi! This is " + VA_NAME + " with Two Trees Cleaning 🌲",
       "",
-      "Service: " + ti.label + " Clean" + (isOneTime ? " (One-Time)" : " · " + fl(freq)),
-      "Home: " + beds + " bed / " + baths + " bath, ~" + sqft.toLocaleString() + " sq ft" + (pets ? ", has pets" : ""),
+      "So good chatting with you today! Here's a quick recap of what we talked about:",
+      "",
+      "• " + ti.label + " Clean" + (isOneTime ? " (One-Time)" : " · " + fl(freq)),
+      "• " + beds + " bed / " + baths + " bath, ~" + sqft.toLocaleString() + " sq ft" + (pets ? ", has pets" : ""),
     ];
-    if (addOnLabels.length) lines.push("Add-ons: " + addOnLabels.join(", "));
-    lines.push("Estimate: $" + quote.low + "–$" + quote.high + " (starting at $" + quote.mid + ")");
+    if (addOnLabels.length) lines.push("• Add-ons: " + addOnLabels.join(", "));
+    lines.push("• Estimate: $" + quote.low + "–$" + quote.high + " (starting around $" + quote.mid + ")");
     lines.push("");
-    lines.push("Let us know if you'd like to get on the schedule!");
+    lines.push("Just let me know if you'd like to get on the schedule — happy to help!");
+    lines.push("");
+    lines.push("– " + VA_NAME);
     return lines.join("\n");
   };
   const copySms = async () => {
@@ -306,7 +311,11 @@ function App() {
                   ? "Start at $" + quote.mid + ". Go higher for heavy buildup, neglected condition, or add-ons like garage/blinds."
                   : "Start at $" + quote.mid + ". Use $" + quote.low + " for simple/tidy homes, $" + quote.high + " for heavily furnished or extra messy."
               ),
-              e("button", { onClick: copySms, style: { width: "100%", marginTop: 16, padding: 13, background: smsCopied ? "#2d6a4f" : tc.accent, border: "none", borderRadius: 12, color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer", transition: "background 0.2s" } }, smsCopied ? "✓ Copied! Paste into SMS" : "💬 Copy Text Message")
+              e("div", { style: { marginTop: 20, paddingTop: 16, borderTop: "1px solid #e8e6e1", textAlign: "left" } },
+                e("div", { style: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#a8a49c", marginBottom: 8 } }, "📱 Text Message Preview"),
+                e("div", { style: { background: "#f9f7f2", border: "1px solid #e8e6e1", borderRadius: 12, padding: "14px 16px", fontSize: 13, color: "#3d2c1e", lineHeight: 1.5, whiteSpace: "pre-wrap" } }, buildSmsText())
+              ),
+              e("button", { onClick: copySms, style: { width: "100%", marginTop: 12, padding: 13, background: smsCopied ? "#2d6a4f" : tc.accent, border: "none", borderRadius: 12, color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer", transition: "background 0.2s" } }, smsCopied ? "✓ Copied! Paste into SMS" : "💬 Copy Text Message")
             )
       ),
 
