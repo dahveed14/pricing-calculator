@@ -30,7 +30,8 @@ const DEFAULT_CONFIG = {
     { upTo: 3000, rate: 0.048 },
     { upTo: Infinity, rate: 0.035 },
   ],
-  bedAdder: 8, bathAdder: 18, petSurcharge: 20,
+  bedAdder: 8, bathAdder: 18,
+  locationSurcharges: { ventura: 0, camarillo: 0, oxnard: 0, ojai: 15, carpinteria: 20 },
   freqMults: { weekly: 0.90, biweekly: 1.00, triweekly: 1.08, monthly: 1.15 },
   tierMults: { essential: 1.0, signature: 1.175, deep: 2.75, moveinout: 3.0 },
   addOnPrices: { fridge: 50, fridgeFreezer: 80, oven: 30, laundry: 25, dishes: 25, windowPane: 8, blindSet: 40, shutterSet: 10 },
@@ -46,7 +47,7 @@ function loadConfigFromURL() {
     const encoded = params.get("cfg");
     if (!encoded) return DEFAULT_CONFIG;
     const d = JSON.parse(atob(encoded));
-    return { ...DEFAULT_CONFIG, ...d, freqMults: { ...DEFAULT_CONFIG.freqMults, ...d.freqMults }, tierMults: { ...DEFAULT_CONFIG.tierMults, ...d.tierMults }, addOnPrices: { ...DEFAULT_CONFIG.addOnPrices, ...d.addOnPrices }, sqftTiers: d.sqftTiers || DEFAULT_CONFIG.sqftTiers };
+    return { ...DEFAULT_CONFIG, ...d, freqMults: { ...DEFAULT_CONFIG.freqMults, ...d.freqMults }, tierMults: { ...DEFAULT_CONFIG.tierMults, ...d.tierMults }, addOnPrices: { ...DEFAULT_CONFIG.addOnPrices, ...d.addOnPrices }, locationSurcharges: { ...DEFAULT_CONFIG.locationSurcharges, ...d.locationSurcharges }, sqftTiers: d.sqftTiers || DEFAULT_CONFIG.sqftTiers };
   } catch { return DEFAULT_CONFIG; }
 }
 
@@ -55,7 +56,7 @@ function configToURL(config) {
   return window.location.origin + window.location.pathname + "?cfg=" + encoded;
 }
 
-function calcBase(beds, baths, sqft, hasPets, cfg) {
+function calcBase(beds, baths, sqft, cfg) {
   let sc = 0, rem = sqft, prev = 0;
   for (const t of cfg.sqftTiers) {
     const ts = Math.min(rem, (t.upTo === Infinity ? rem : t.upTo) - prev);
@@ -65,14 +66,13 @@ function calcBase(beds, baths, sqft, hasPets, cfg) {
   }
   const bc = Math.max(0, beds - 1) * cfg.bedAdder;
   const btc = Math.max(0, baths - 1) * cfg.bathAdder;
-  const pc = hasPets ? cfg.petSurcharge : 0;
-  return { subtotal: cfg.base + sc + bc + btc + pc, baseVal: cfg.base, sqft: Math.round(sc), beds: bc, baths: btc, pets: pc };
+  return { subtotal: cfg.base + sc + bc + btc, baseVal: cfg.base, sqft: Math.round(sc), beds: bc, baths: btc };
 }
 
 const ONE_TIME_TIERS = ["deep", "moveinout"];
 
-function calcQuote(beds, baths, sqft, hasPets, freq, tier, addOns, cfg) {
-  const b = calcBase(beds, baths, sqft, hasPets, cfg);
+function calcQuote(beds, baths, sqft, freq, tier, addOns, location, cfg) {
+  const b = calcBase(beds, baths, sqft, cfg);
   const tm = cfg.tierMults[tier] || 1.0;
   const fm = ONE_TIME_TIERS.includes(tier) ? 1.0 : (freq === "onetime" ? cfg.freqMults.monthly : (cfg.freqMults[freq] || 1.0));
   let ao = 0;
@@ -84,10 +84,11 @@ function calcQuote(beds, baths, sqft, hasPets, freq, tier, addOns, cfg) {
   if (addOns.windows > 0) ao += addOns.windows * cfg.addOnPrices.windowPane;
   if (addOns.blinds > 0) ao += addOns.blinds * cfg.addOnPrices.blindSet;
   if (addOns.shutters > 0) ao += addOns.shutters * cfg.addOnPrices.shutterSet;
-  const fp = b.subtotal * tm * fm + ao;
+  const lc = cfg.locationSurcharges[location] || 0;
+  const fp = b.subtotal * tm * fm + ao + lc;
   const r = Math.round(fp / 5) * 5;
   const sp = ONE_TIME_TIERS.includes(tier) ? cfg.deepRangeSpread : cfg.normalRangeSpread;
-  return { low: r - sp, mid: r, high: r + sp, addOnTotal: ao, breakdown: { base: b.baseVal, sqft: b.sqft, beds: b.beds, baths: b.baths, pets: b.pets, essentialSubtotal: Math.round(b.subtotal), tierMult: tm, freqMult: fm, tier, addOnTotal: ao } };
+  return { low: r - sp, mid: r, high: r + sp, addOnTotal: ao, locationFee: lc, breakdown: { base: b.baseVal, sqft: b.sqft, beds: b.beds, baths: b.baths, essentialSubtotal: Math.round(b.subtotal), tierMult: tm, freqMult: fm, tier, addOnTotal: ao, locationFee: lc } };
 }
 
 const TIERS = [{ key: "essential", label: "Essential", desc: "Standard recurring" }, { key: "signature", label: "Signature", desc: "Essential + deep item" }, { key: "deep", label: "Total Deep", desc: "All deep · One-time" }, { key: "moveinout", label: "Move-In/Out", desc: "Empty home · One-time" }];
@@ -99,6 +100,8 @@ const TIER_SCRIPTS = {
 };
 const FREQ_OPTIONS = [{ key: "weekly", label: "Weekly", note: "Best value" }, { key: "biweekly", label: "Every 2 Weeks", note: "Most popular" }, { key: "triweekly", label: "Every 3 Weeks", note: "" }, { key: "monthly", label: "Monthly", note: "" }, { key: "onetime", label: "One-Time", note: "" }];
 const SQFT_OPTIONS = [{ val: 800, label: "Under 1K" }, { val: 1250, label: "1K–1.5K" }, { val: 1750, label: "1.5K–2K" }, { val: 2250, label: "2K–2.5K" }, { val: 2750, label: "2.5K–3K" }, { val: 3250, label: "3K+" }];
+const LOCATIONS = [{ key: "ventura", label: "Ventura" }, { key: "camarillo", label: "Camarillo" }, { key: "oxnard", label: "Oxnard" }, { key: "ojai", label: "Ojai" }, { key: "carpinteria", label: "Carpinteria" }];
+const CONDITIONS = [{ key: "light", label: "Light" }, { key: "moderate", label: "Moderate" }, { key: "heavy", label: "Heavy" }];
 const TC = {
   essential: { accent: "#2d6a4f", bg: "#d8f3dc", hdr: "linear-gradient(135deg,#1a3a2a,#2d5a3f)", sub: "#7bc4a0" },
   signature: { accent: "#7c5e2c", bg: "#fdf3d7", hdr: "linear-gradient(135deg,#3d2c1e,#6b5340)", sub: "#d4a96a" },
@@ -118,13 +121,14 @@ function App() {
   const [beds, setBeds] = useState(null);
   const [baths, setBaths] = useState(null);
   const [sqft, setSqft] = useState(null);
-  const [pets, setPets] = useState(null);
+  const [location, setLocation] = useState(null);
+  const [condition, setCondition] = useState(null);
   const [freq, setFreq] = useState(null);
   const [addOns, setAddOns] = useState({ ...DA });
 
   const isOneTime = ONE_TIME_TIERS.includes(tier);
-  const allSel = beds !== null && baths !== null && sqft !== null && pets !== null && (isOneTime || freq !== null);
-  const quote = useMemo(() => allSel ? calcQuote(beds, baths, sqft, pets, freq, tier, addOns, cfg) : null, [beds, baths, sqft, pets, freq, tier, addOns, cfg, allSel]);
+  const allSel = beds !== null && baths !== null && sqft !== null && location !== null && (isOneTime || freq !== null);
+  const quote = useMemo(() => allSel ? calcQuote(beds, baths, sqft, freq, tier, addOns, location, cfg) : null, [beds, baths, sqft, freq, tier, addOns, location, cfg, allSel]);
 
   const handleTap = useCallback(() => {
     const nc = tapCount + 1;
@@ -134,7 +138,7 @@ function App() {
     setTapTimer(setTimeout(() => setTapCount(0), 800));
   }, [tapCount, tapTimer]);
 
-  const reset = () => { setBeds(null); setBaths(null); setSqft(null); setPets(null); setFreq(null); setAddOns({ ...DA }); };
+  const reset = () => { setBeds(null); setBaths(null); setSqft(null); setLocation(null); setCondition(null); setFreq(null); setAddOns({ ...DA }); };
   const togAO = (k) => setAddOns(p => {
     const n = { ...p };
     if (k === "fridge") { n.fridge = !p.fridge; if (n.fridge) n.fridgeFreezer = false; }
@@ -165,9 +169,11 @@ function App() {
       "So good chatting with you today! Here's a quick recap of what we talked about:",
       "",
       "• " + ti.label + " Clean" + (isOneTime ? " (One-Time)" : " · " + fl(freq)),
-      "• " + beds + " bed / " + baths + " bath, ~" + sqft.toLocaleString() + " sq ft" + (pets ? ", has pets" : ""),
+      "• " + beds + " bed / " + baths + " bath, ~" + sqft.toLocaleString() + " sq ft in " + loc.label,
     ];
     if (addOnLabels.length) lines.push("• Add-ons: " + addOnLabels.join(", "));
+    if (quote.locationFee > 0) lines.push("• Travel (" + loc.label + "): +$" + quote.locationFee);
+    if (condition) lines.push("• Condition: " + (CONDITIONS.find(c => c.key === condition) || {}).label);
     lines.push("• Estimate: $" + quote.low + "–$" + quote.high + " (starting around $" + quote.mid + ")");
     lines.push("");
     lines.push("Just let me know if you'd like to get on the schedule — happy to help!");
@@ -188,6 +194,7 @@ function App() {
 
   const tc = TC[tier];
   const ti = TIERS.find(t => t.key === tier);
+  const loc = LOCATIONS.find(l => l.key === location) || { label: "" };
   const fl = (k) => ({ weekly: "Weekly", biweekly: "Biweekly", triweekly: "Every 3 Wks", monthly: "Monthly", onetime: "One-Time" }[k] || k);
   const hasAO = addOns.fridge || addOns.fridgeFreezer || addOns.oven || addOns.laundry || addOns.dishes || addOns.windows > 0 || addOns.blinds > 0 || addOns.shutters > 0;
 
@@ -211,7 +218,8 @@ function App() {
         e("p", { style: { fontSize: 11, color: "#999", marginBottom: 16 } }, "Pricing last updated: " + PRICING_LAST_UPDATED),
         AG("Base Price", [AI("Base ($)", cfg.base, v => uCfg("base", v))]),
         AG("Sqft Rates (per sqft)", [AI("0–1K", cfg.sqftTiers[0].rate, v => uCfg("sqftTiers.0.rate", v), 0.001), AI("1K–2K", cfg.sqftTiers[1].rate, v => uCfg("sqftTiers.1.rate", v), 0.001), AI("2K–3K", cfg.sqftTiers[2].rate, v => uCfg("sqftTiers.2.rate", v), 0.001), AI("3K+", cfg.sqftTiers[3].rate, v => uCfg("sqftTiers.3.rate", v), 0.001)]),
-        AG("Adders", [AI("Per Bed ($)", cfg.bedAdder, v => uCfg("bedAdder", v)), AI("Per Bath ($)", cfg.bathAdder, v => uCfg("bathAdder", v)), AI("Pet ($)", cfg.petSurcharge, v => uCfg("petSurcharge", v))]),
+        AG("Adders", [AI("Per Bed ($)", cfg.bedAdder, v => uCfg("bedAdder", v)), AI("Per Bath ($)", cfg.bathAdder, v => uCfg("bathAdder", v))]),
+        AG("Location Surcharges ($)", LOCATIONS.map(l => AI(l.label, cfg.locationSurcharges[l.key], v => uCfg("locationSurcharges." + l.key, v)))),
         AG("Frequency Multipliers", [AI("Weekly", cfg.freqMults.weekly, v => uCfg("freqMults.weekly", v), 0.01), AI("Biweekly", cfg.freqMults.biweekly, v => uCfg("freqMults.biweekly", v), 0.01), AI("3-Week", cfg.freqMults.triweekly, v => uCfg("freqMults.triweekly", v), 0.01), AI("Monthly", cfg.freqMults.monthly, v => uCfg("freqMults.monthly", v), 0.01)]),
         AG("Tier Multipliers", [AI("Essential", cfg.tierMults.essential, v => uCfg("tierMults.essential", v), 0.01), AI("Signature", cfg.tierMults.signature, v => uCfg("tierMults.signature", v), 0.01), AI("Deep", cfg.tierMults.deep, v => uCfg("tierMults.deep", v), 0.01), AI("Move-In/Out", cfg.tierMults.moveinout, v => uCfg("tierMults.moveinout", v), 0.01)]),
         AG("Add-On Prices", [AI("Fridge", cfg.addOnPrices.fridge, v => uCfg("addOnPrices.fridge", v)), AI("Fridge+Frz", cfg.addOnPrices.fridgeFreezer, v => uCfg("addOnPrices.fridgeFreezer", v)), AI("Oven", cfg.addOnPrices.oven, v => uCfg("addOnPrices.oven", v)), AI("Laundry", cfg.addOnPrices.laundry, v => uCfg("addOnPrices.laundry", v)), AI("Dishes", cfg.addOnPrices.dishes, v => uCfg("addOnPrices.dishes", v)), AI("Win/pane", cfg.addOnPrices.windowPane, v => uCfg("addOnPrices.windowPane", v)), AI("Blind/set", cfg.addOnPrices.blindSet, v => uCfg("addOnPrices.blindSet", v)), AI("Shutter/set", cfg.addOnPrices.shutterSet, v => uCfg("addOnPrices.shutterSet", v))]),
@@ -246,8 +254,11 @@ function App() {
       // Sqft
       Sec("Square Footage (approx)", e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 } }, ...SQFT_OPTIONS.map(o => OB(o.label, sqft === o.val, () => setSqft(o.val), tc, true)))),
 
-      // Pets
-      Sec("Pets (shedding dogs/cats)", e("div", { style: { display: "flex", gap: 8 } }, OB("No Pets", pets === false, () => setPets(false), tc, false), OB("Has Pets (+$" + cfg.petSurcharge + ")", pets === true, () => setPets(true), tc, false))),
+      // Location
+      Sec("Location", e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 } }, ...LOCATIONS.map(l => OB(l.label + (cfg.locationSurcharges[l.key] > 0 ? " +$" + cfg.locationSurcharges[l.key] : ""), location === l.key, () => setLocation(l.key), tc, true)))),
+
+      // Condition
+      Sec("Condition (no price impact — use judgment)", e("div", { style: { display: "flex", gap: 8 } }, ...CONDITIONS.map(c => OB(c.label, condition === c.key, () => setCondition(c.key), tc, false)))),
 
       // Frequency
       !isOneTime && Sec("Cleaning Frequency", e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } }, ...FREQ_OPTIONS.map((o, i) => e("div", { key: o.key, style: i === FREQ_OPTIONS.length - 1 && FREQ_OPTIONS.length % 2 === 1 ? { gridColumn: "1 / -1" } : null }, FB(o.label, o.note, freq === o.key, () => setFreq(o.key), tc))))),
@@ -275,7 +286,7 @@ function App() {
       // Quote Card
       e("div", { style: { marginTop: 28, background: "#fff", borderRadius: 20, padding: "28px 24px", textAlign: "center", boxShadow: allSel ? "0 4px 24px rgba(0,0,0,0.08)" : "0 2px 12px rgba(0,0,0,0.04)", border: allSel ? "2px solid " + tc.accent + "88" : "2px solid #e8e6e1", transition: "all 0.3s" } },
         !allSel
-          ? e("p", { style: { color: "#a8a49c", fontSize: 15, padding: "12px 0", margin: 0 } }, isOneTime ? "Select bedrooms, bathrooms, sqft, and pets" : "Select all options above to see quote")
+          ? e("p", { style: { color: "#a8a49c", fontSize: 15, padding: "12px 0", margin: 0 } }, isOneTime ? "Select bedrooms, bathrooms, sqft, and location" : "Select all options above to see quote")
           : e(React.Fragment, null,
               e("div", { style: { display: "inline-block", padding: "4px 14px", background: tc.bg, borderRadius: 20, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: tc.accent, marginBottom: 8 } }, ti.label + " Clean" + (isOneTime ? " · One-Time" : "") + (hasAO ? " + Add-Ons" : "")),
               e("div", { style: { fontSize: 50, fontWeight: 800, color: "#1a1a1a", margin: "4px 0 4px", lineHeight: 1, fontFeatureSettings: "'tnum'" } }, "$" + quote.mid),
@@ -285,10 +296,10 @@ function App() {
                 BR("Sqft (~" + sqft.toLocaleString() + ")", "$" + quote.breakdown.sqft),
                 BR("Bedrooms (" + beds + ")", "+$" + quote.breakdown.beds),
                 BR("Bathrooms (" + baths + ")", "+$" + quote.breakdown.baths),
-                pets && BR("Pet surcharge", "+$" + quote.breakdown.pets),
                 e("div", { style: { display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: 13, color: "#6b6860", borderTop: "1px dashed #e8e6e1", marginTop: 6, paddingTop: 10 } }, e("span", null, "Essential subtotal"), e("span", { style: { fontWeight: 600, color: "#3d2c1e" } }, "$" + quote.breakdown.essentialSubtotal)),
                 tier !== "essential" && BR(ti.label + " multiplier", "×" + quote.breakdown.tierMult),
                 !isOneTime && freq !== "biweekly" && BR("Frequency (" + fl(freq) + ")", "×" + quote.breakdown.freqMult.toFixed(2)),
+                quote.locationFee > 0 && BR("Travel (" + loc.label + ")", "+$" + quote.locationFee),
                 hasAO && e(React.Fragment, null,
                   e("div", { style: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#a8a49c", marginTop: 12, marginBottom: 4 } }, "Add-Ons"),
                   addOns.fridge && BR("Inside Fridge", "+$" + cfg.addOnPrices.fridge),
