@@ -36,10 +36,12 @@ const DEFAULT_CONFIG = {
   tierMults: { essential: 1.0, signature: 1.175, deep: 2.75, moveinout: 3.0 },
   addOnPrices: { fridge: 50, fridgeFreezer: 80, oven: 30, laundry: 25, dishes: 25, windowPane: 8, blindSet: 40, shutterSet: 10 },
   deepRangeSpread: 25, normalRangeSpread: 10,
+  crewRate: 100,
 };
 
 const PRICING_LAST_UPDATED = "2026-09-30";
 const VA_NAME = "Kaleigh";
+const CREW_SIZE = 2;
 
 function loadConfigFromURL() {
   try {
@@ -70,6 +72,15 @@ function calcBase(beds, baths, sqft, cfg) {
 }
 
 const ONE_TIME_TIERS = ["deep", "moveinout"];
+
+function timeEstimate(mid, rate) {
+  const raw = mid / rate;
+  let low = Math.floor(raw * 2) / 2;
+  let high = Math.ceil(raw * 2) / 2;
+  if (low === high) low = Math.max(0.5, low - 0.5);
+  return { low, high };
+}
+function fmtH(h) { return h % 1 === 0 ? String(h) : h.toFixed(1); }
 
 function calcQuote(beds, baths, sqft, freq, tier, addOns, location, cfg) {
   const b = calcBase(beds, baths, sqft, cfg);
@@ -217,6 +228,7 @@ function App() {
         ),
         e("p", { style: { fontSize: 11, color: "#999", marginBottom: 16 } }, "Pricing last updated: " + PRICING_LAST_UPDATED),
         AG("Base Price", [AI("Base ($)", cfg.base, v => uCfg("base", v))]),
+        AG("Crew Rate ($/hr, " + CREW_SIZE + "-person crew)", [AI("Rate ($/hr)", cfg.crewRate, v => uCfg("crewRate", v))]),
         AG("Sqft Rates (per sqft)", [AI("0–1K", cfg.sqftTiers[0].rate, v => uCfg("sqftTiers.0.rate", v), 0.001), AI("1K–2K", cfg.sqftTiers[1].rate, v => uCfg("sqftTiers.1.rate", v), 0.001), AI("2K–3K", cfg.sqftTiers[2].rate, v => uCfg("sqftTiers.2.rate", v), 0.001), AI("3K+", cfg.sqftTiers[3].rate, v => uCfg("sqftTiers.3.rate", v), 0.001)]),
         AG("Adders", [AI("Per Bed ($)", cfg.bedAdder, v => uCfg("bedAdder", v)), AI("Per Bath ($)", cfg.bathAdder, v => uCfg("bathAdder", v))]),
         AG("Location Surcharges ($)", LOCATIONS.map(l => AI(l.label, cfg.locationSurcharges[l.key], v => uCfg("locationSurcharges." + l.key, v)))),
@@ -291,6 +303,7 @@ function App() {
               e("div", { style: { display: "inline-block", padding: "4px 14px", background: tc.bg, borderRadius: 20, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: tc.accent, marginBottom: 8 } }, ti.label + " Clean" + (isOneTime ? " · One-Time" : "") + (hasAO ? " + Add-Ons" : "")),
               e("div", { style: { fontSize: 50, fontWeight: 800, color: "#1a1a1a", margin: "4px 0 4px", lineHeight: 1, fontFeatureSettings: "'tnum'" } }, "$" + quote.mid),
               e("div", { style: { fontSize: 14, color: "#6b6860", fontWeight: 500 } }, "Range: $" + quote.low + " – $" + quote.high),
+              e("div", { style: { fontSize: 12, color: "#a8a49c", marginTop: 4 } }, "⏱ Est. time: ~" + fmtH(timeEstimate(quote.mid, cfg.crewRate).low) + "–" + fmtH(timeEstimate(quote.mid, cfg.crewRate).high) + " hrs (based on a " + CREW_SIZE + "-person crew)"),
               e("div", { style: { marginTop: 20, paddingTop: 16, borderTop: "1px solid #e8e6e1", textAlign: "left" } },
                 BR("Base", "$" + quote.breakdown.base),
                 BR("Sqft (~" + sqft.toLocaleString() + ")", "$" + quote.breakdown.sqft),
