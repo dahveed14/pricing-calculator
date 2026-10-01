@@ -37,6 +37,8 @@ const DEFAULT_CONFIG = {
   deepRangeSpread: 25, normalRangeSpread: 10,
 };
 
+const PRICING_LAST_UPDATED = "2026-09-30";
+
 function loadConfigFromURL() {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -173,6 +175,7 @@ function App() {
           e("span", { style: { fontWeight: 700, fontSize: 14, textTransform: "uppercase", letterSpacing: 1 } }, "⚙️ Admin Settings"),
           e("button", { onClick: () => setShowAdmin(false), style: { background: "none", border: "1px solid #444", borderRadius: 8, padding: "4px 12px", color: "#999", fontFamily: "inherit", fontSize: 12, cursor: "pointer" } }, "Close")
         ),
+        e("p", { style: { fontSize: 11, color: "#999", marginBottom: 16 } }, "Pricing last updated: " + PRICING_LAST_UPDATED),
         AG("Base Price", [AI("Base ($)", cfg.base, v => uCfg("base", v))]),
         AG("Sqft Rates (per sqft)", [AI("0–1K", cfg.sqftTiers[0].rate, v => uCfg("sqftTiers.0.rate", v), 0.001), AI("1K–2K", cfg.sqftTiers[1].rate, v => uCfg("sqftTiers.1.rate", v), 0.001), AI("2K–3K", cfg.sqftTiers[2].rate, v => uCfg("sqftTiers.2.rate", v), 0.001), AI("3K+", cfg.sqftTiers[3].rate, v => uCfg("sqftTiers.3.rate", v), 0.001)]),
         AG("Adders", [AI("Per Bed ($)", cfg.bedAdder, v => uCfg("bedAdder", v)), AI("Per Bath ($)", cfg.bathAdder, v => uCfg("bathAdder", v)), AI("Pet ($)", cfg.petSurcharge, v => uCfg("petSurcharge", v))]),
