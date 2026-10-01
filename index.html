@@ -112,6 +112,7 @@ function App() {
   const [tapCount, setTapCount] = useState(0);
   const [tapTimer, setTapTimer] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [smsCopied, setSmsCopied] = useState(false);
   const [tier, setTier] = useState("essential");
   const [beds, setBeds] = useState(null);
   const [baths, setBaths] = useState(null);
@@ -147,6 +148,33 @@ function App() {
     for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]];
     o[ks[ks.length - 1]] = val; return n;
   });
+  const buildSmsText = () => {
+    const addOnLabels = [];
+    if (addOns.fridge) addOnLabels.push("Inside Fridge");
+    if (addOns.fridgeFreezer) addOnLabels.push("Fridge + Freezer");
+    if (addOns.oven) addOnLabels.push("Oven");
+    if (addOns.laundry) addOnLabels.push("Laundry");
+    if (addOns.dishes) addOnLabels.push("Dishes");
+    if (addOns.windows > 0) addOnLabels.push(addOns.windows + " Window" + (addOns.windows > 1 ? "s" : ""));
+    if (addOns.blinds > 0) addOnLabels.push(addOns.blinds + " Blind Set" + (addOns.blinds > 1 ? "s" : ""));
+    if (addOns.shutters > 0) addOnLabels.push(addOns.shutters + " Shutter Set" + (addOns.shutters > 1 ? "s" : ""));
+    const lines = [
+      "Hi! Thanks for chatting with Two Trees Cleaning today. Here's your quote summary:",
+      "",
+      "Service: " + ti.label + " Clean" + (isOneTime ? " (One-Time)" : " · " + fl(freq)),
+      "Home: " + beds + " bed / " + baths + " bath, ~" + sqft.toLocaleString() + " sq ft" + (pets ? ", has pets" : ""),
+    ];
+    if (addOnLabels.length) lines.push("Add-ons: " + addOnLabels.join(", "));
+    lines.push("Estimate: $" + quote.low + "–$" + quote.high + " (starting at $" + quote.mid + ")");
+    lines.push("");
+    lines.push("Let us know if you'd like to get on the schedule!");
+    return lines.join("\n");
+  };
+  const copySms = async () => {
+    const txt = buildSmsText();
+    try { await navigator.clipboard.writeText(txt); } catch { const ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
+    setSmsCopied(true); setTimeout(() => setSmsCopied(false), 2000);
+  };
   const copyLink = async () => {
     const url = configToURL(cfg);
     try { await navigator.clipboard.writeText(url); } catch { const ta = document.createElement("textarea"); ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
@@ -277,7 +305,8 @@ function App() {
                   : tier === "moveinout"
                   ? "Start at $" + quote.mid + ". Go higher for heavy buildup, neglected condition, or add-ons like garage/blinds."
                   : "Start at $" + quote.mid + ". Use $" + quote.low + " for simple/tidy homes, $" + quote.high + " for heavily furnished or extra messy."
-              )
+              ),
+              e("button", { onClick: copySms, style: { width: "100%", marginTop: 16, padding: 13, background: smsCopied ? "#2d6a4f" : tc.accent, border: "none", borderRadius: 12, color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer", transition: "background 0.2s" } }, smsCopied ? "✓ Copied! Paste into SMS" : "💬 Copy Text Message")
             )
       ),
 
