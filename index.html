@@ -186,6 +186,8 @@ function App() {
     if (quote.locationFee > 0) lines.push("• Travel (" + loc.label + "): +$" + quote.locationFee);
     if (condition) lines.push("• Condition: " + (CONDITIONS.find(c => c.key === condition) || {}).label);
     lines.push("• Estimate: $" + quote.low + "–$" + quote.high + " (starting around $" + quote.mid + ")");
+    const te = timeEstimate(quote.mid, cfg.crewRate);
+    lines.push("• Est. time: ~" + fmtH(te.low) + "–" + fmtH(te.high) + " hrs (" + CREW_SIZE + "-person crew)");
     lines.push("");
     lines.push("Just let me know if you'd like to get on the schedule — happy to help!");
     lines.push("");
